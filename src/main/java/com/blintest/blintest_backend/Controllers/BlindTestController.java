@@ -55,17 +55,19 @@ public class BlindTestController {
                 Map<String, Object> playAtRefrainRequest = new HashMap<>();
                 playAtRefrainRequest.put("uris", List.of("spotify:track:" + song.getId()));
                 playAtRefrainRequest.put("position_ms", estimatedRefrain);
+                Thread.sleep(1000);  //marquer la transition entre l'intro et le reveal
 
                 restTemplate.put(playUrl, playAtRefrainRequest);
 
                 System.out.println("Playing estimated refrain for: " + song.getName() + " at " + estimatedRefrain + "ms");
-                Thread.sleep(10000); // Lecture du refrain
+                System.out.println("Revealing: " + song.getName() + " by " + song.getArtist());
+                Thread.sleep(15000); // Lecture du refrain
 
                 // Pause pour révélation
                 String pauseUrl = "http://localhost:8080/spotify/player/pause";
                 restTemplate.put(pauseUrl, null);
-                System.out.println("Revealing: " + song.getName() + " by " + song.getArtist());
-                Thread.sleep(10000);
+                Thread.sleep(2000); //timer de deux secondes entre deux titres différents
+
             }
 
             return ResponseEntity.ok("Blind test sequence completed.");
@@ -75,5 +77,4 @@ public class BlindTestController {
                     .body("An error occurred during the blind test sequence: " + e.getMessage());
         }
     }
-
 }
