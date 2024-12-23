@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spotify Blindtest</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        button {
+            margin: 10px 0;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        #results {
+            margin-top: 20px;
+        }
+        .error {
+            color: red;
+        }
+    </style>
+</head>
+<body>
+    <h1>Spotify Blindtest</h1>
+    <p>Bienvenue dans votre application Blindtest. Cliquez sur les boutons ci-dessous pour interagir avec votre API.</p>
+
+    <button id="loginButton">Se connecter à Spotify</button>
+    <button id="getPlaylistsButton">Afficher mes playlists</button>
+
+    <div id="results"></div>
+
+    <script>
+        const apiBaseUrl = "http://localhost:8080/spotify";
+
+        // Gère le clic sur le bouton de connexion
+        document.getElementById("loginButton").addEventListener("click", () => {
+            fetch(`${apiBaseUrl}/login`, { method: "GET", redirect: "follow" })
+                .then(response => {
+                    if (response.redirected) {
+                        window.location.href = response.url; // Redirige vers Spotify
+                    } else {
+                        showError("Erreur lors de la tentative de connexion.");
+                    }
+                })
+                .catch(err => showError("Une erreur est survenue : " + err.message));
+        });
+
+        // Gère le clic sur le bouton pour afficher les playlists
+        document.getElementById("getPlaylistsButton").addEventListener("click", () => {
+            fetch(`${apiBaseUrl}/playlists`)
+                .then(response => response.json())
+                .then(data => displayPlaylists(data))
+                .catch(err => showError("Une erreur est survenue : " + err.message));
+        });
+
+        // Affiche les playlists dans le DOM
+        function displayPlaylists(data) {
+            const resultsDiv = document.getElementById("results");
+            resultsDiv.innerHTML = ""; // Réinitialise les résultats
+
+            if (data.error) {
+                showError(data.error);
+                return;
+            }
+
+            if (data.items && data.items.length > 0) {
+                const playlistList = document.createElement("ul");
+                data.items.forEach(playlist => {
+                    const listItem = document.createElement("li");
+                    listItem.textContent = `${playlist.name} (ID: ${playlist.id})`;
+                    playlistList.appendChild(listItem);
+                });
+                resultsDiv.appendChild(playlistList);
+            } else {
+                resultsDiv.textContent = "Aucune playlist trouvée.";
+            }
+        }
+
+        // Affiche un message d'erreur
+        function showError(message) {
+            const resultsDiv = document.getElementById("results");
+            resultsDiv.innerHTML = `<p class="error">${message}</p>`;
+        }
+    </script>
+</body>
+</html>
