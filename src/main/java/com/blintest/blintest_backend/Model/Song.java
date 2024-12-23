@@ -34,5 +34,17 @@ public class Song {
     public int getDurationMs() {
         return durationMs;
     }
+
+    public int estimateRefrainPosition() {
+        // Supposons que le refrain commence à 40% de la durée totale
+        return (int) (durationMs * 0.4);
+    }
+    public int getDuration() {
+        return durationMs;
+    }
+
+    public void setDuration(int duration) {
+        this.durationMs = duration;
+    }
 }
 

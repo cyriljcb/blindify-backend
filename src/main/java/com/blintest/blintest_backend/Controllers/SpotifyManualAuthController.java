@@ -48,7 +48,7 @@ public class SpotifyManualAuthController {
                 .queryParam("client_id", clientId)
                 .queryParam("response_type", "code")
                 .queryParam("redirect_uri", redirectUri)
-                .queryParam("scope", "user-read-private playlist-read-private")
+                .queryParam("scope", "user-read-private playlist-read-private user-modify-playback-state user-read-playback-state")
                 .toUriString();
         System.out.println("Endpoint /spotify/login reached");
         return ResponseEntity.status(HttpStatus.FOUND).header(HttpHeaders.LOCATION, authorizationUrl).build();

@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
 
+/*TODO à implémenter plus tard pour avoir des options de jeu etc*/
 public class Game {
     private Playlist playlist;
     private int currentSongIndex = 0;
@@ -26,8 +27,6 @@ public class Game {
         }
 
         Song currentSong = playlist.getSongs().get(currentSongIndex);
-
-        // Lecture de l'extrait audio (20 secondes simulé ici)
         System.out.println("Playing: " + currentSong.getName() + " by " + currentSong.getArtist());
         timer.schedule(new TimerTask() {
             @Override
