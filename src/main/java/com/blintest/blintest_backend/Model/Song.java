@@ -7,7 +7,6 @@ public class Song {
     private String previewUrl; // URL pour un extrait audio de la chanson (Spotify API)
     private int durationMs;    // Durée de la chanson en millisecondes
 
-    // Constructeur
     public Song(String id, String name, String artist, String previewUrl, int durationMs) {
         this.id = id;
         this.name = name;
@@ -16,7 +15,6 @@ public class Song {
         this.durationMs = durationMs;
     }
 
-    // Getters et Setters
     public String getId() {
         return id;
     }
