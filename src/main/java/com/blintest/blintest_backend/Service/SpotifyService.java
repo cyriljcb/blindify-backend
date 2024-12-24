@@ -17,10 +17,13 @@ import java.util.Map;
 public class SpotifyService {
 
     private final SpotifyTokenManager tokenManager;
+    private final RestTemplate restTemplate;
+
 
     @Autowired
     public SpotifyService(SpotifyTokenManager tokenManager) {
         this.tokenManager = tokenManager;
+        this.restTemplate = new RestTemplate();
     }
 
     public Playlist getPlaylist(String playlistId) {
@@ -73,5 +76,20 @@ public class SpotifyService {
 
         return new Playlist(playlistId, playlistName, songs);
     }
+    public List<Map<String, Object>> getUserPlaylists() {
+        String url = "https://api.spotify.com/v1/me/playlists";
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("Authorization", "Bearer " + tokenManager.getAccessToken());
 
+        HttpEntity<Void> entity = new HttpEntity<>(headers);
+
+        ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.GET, entity, Map.class);
+
+        Map<String, Object> body = response.getBody();
+        if (body != null && body.containsKey("items")) {
+            return (List<Map<String, Object>>) body.get("items");
+        }
+
+        return List.of(); // Retourne une liste vide si aucune playlist n'est trouvée
+    }
 }
