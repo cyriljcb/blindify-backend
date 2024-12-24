@@ -12,21 +12,27 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @RestController
 @RequestMapping("/blindtest")
 public class BlindTestController {
     private final SpotifyService spotifyService;
     private final RestTemplate restTemplate;
+    private Thread blindTestThread;
+    private final AtomicBoolean isPaused;
+    private final AtomicBoolean isStopped;
 
     public BlindTestController(SpotifyService spotifyService) {
         this.spotifyService = spotifyService;
         this.restTemplate = new RestTemplate();
+        this.isPaused = new AtomicBoolean(false);
+        this.isStopped = new AtomicBoolean(false);
     }
+
     @GetMapping("/sequence")
     public ResponseEntity<?> startSequenceWithSpotify(@RequestParam("playlistId") String playlistId) {
         try {
-            // Récupérer les chansons de la playlist
             Playlist playlist = spotifyService.getPlaylist(playlistId);
             List<Song> songs = playlist.getSongs();
 
@@ -35,46 +41,100 @@ public class BlindTestController {
                         .body("No songs found in the playlist.");
             }
 
-            // Mélanger les chansons pour lecture aléatoire
             Collections.shuffle(songs);
 
-            for (Song song : songs) {
-                // Lecture de l'introduction
-                String playUrl = "http://localhost:8080/spotify/player/play";
-                Map<String, Object> playRequest = new HashMap<>();
-                playRequest.put("uris", List.of("spotify:track:" + song.getId()));
+            blindTestThread = new Thread(() -> {
+                try {
+                    for (Song song : songs) {
+                        if (isStopped.get()) break;
 
-                restTemplate.put(playUrl, playRequest);
+                        synchronized (isPaused) {
+                            while (isPaused.get()) {
+                                isPaused.wait();
+                            }
+                        }
 
-                // Lecture pendant 20 secondes
-                System.out.println("Playing: " + song.getName() + " by " + song.getArtist());
-                Thread.sleep(20000);
+                        String playUrl = "http://localhost:8080/spotify/player/play";
+                        Map<String, Object> playRequest = new HashMap<>();
+                        playRequest.put("uris", List.of("spotify:track:" + song.getId()));
 
-                // Passer au refrain estimé
-                int estimatedRefrain = song.estimateRefrainPosition();
-                Map<String, Object> playAtRefrainRequest = new HashMap<>();
-                playAtRefrainRequest.put("uris", List.of("spotify:track:" + song.getId()));
-                playAtRefrainRequest.put("position_ms", estimatedRefrain);
-                Thread.sleep(1000);  //marquer la transition entre l'intro et le reveal
+                        restTemplate.put(playUrl, playRequest);
 
-                restTemplate.put(playUrl, playAtRefrainRequest);
+                        System.out.println("Playing: " + song.getName() + " by " + song.getArtist());
+                        Thread.sleep(20000);
 
-                System.out.println("Playing estimated refrain for: " + song.getName() + " at " + estimatedRefrain + "ms");
-                System.out.println("Revealing: " + song.getName() + " by " + song.getArtist());
-                Thread.sleep(15000); // Lecture du refrain
+                        int estimatedRefrain = song.estimateRefrainPosition();
+                        Map<String, Object> playAtRefrainRequest = new HashMap<>();
+                        playAtRefrainRequest.put("uris", List.of("spotify:track:" + song.getId()));
+                        playAtRefrainRequest.put("position_ms", estimatedRefrain);
 
-                // Pause pour révélation
-                String pauseUrl = "http://localhost:8080/spotify/player/pause";
-                restTemplate.put(pauseUrl, null);
-                Thread.sleep(2000); //timer de deux secondes entre deux titres différents
+                        String pauseUrl = "http://localhost:8080/spotify/player/pause";
+                        restTemplate.put(pauseUrl, null);
+                        Thread.sleep(1000);
 
-            }
+                        restTemplate.put(playUrl, playAtRefrainRequest);
+                        System.out.println("Playing estimated refrain for: " + song.getName());
+                        Thread.sleep(15000);
 
-            return ResponseEntity.ok("Blind test sequence completed.");
+                        restTemplate.put(pauseUrl, null);
+                        Thread.sleep(2000);
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            });
+
+            isStopped.set(false);
+            blindTestThread.start();
+
+            return ResponseEntity.ok("Blind test started.");
         } catch (Exception e) {
             e.printStackTrace();
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("An error occurred during the blind test sequence: " + e.getMessage());
         }
+    }
+
+    //met en pause le blindtest mais fini quand meme la musique en cours
+    @PutMapping("/pause")
+    public ResponseEntity<?> pauseBlindTest() {
+        if (blindTestThread == null || !blindTestThread.isAlive()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body("No blind test in progress to pause.");
+        }
+
+        isPaused.set(true);
+        return ResponseEntity.ok("Blind test paused.");
+    }
+
+    @PutMapping("/resume")
+    public ResponseEntity<?> resumeBlindTest() {
+        if (blindTestThread == null || !blindTestThread.isAlive()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body("No blind test in progress to resume.");
+        }
+
+        synchronized (isPaused) {
+            isPaused.set(false);
+            isPaused.notifyAll();
+        }
+
+        return ResponseEntity.ok("Blind test resumed.");
+    }
+
+    @PutMapping("/stop")
+    public ResponseEntity<?> stopBlindTest() {
+        if (blindTestThread == null || !blindTestThread.isAlive()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body("No blind test in progress to stop.");
+        }
+
+        isStopped.set(true);
+        isPaused.set(false); // Ensure no deadlock if paused
+        synchronized (isPaused) {
+            isPaused.notifyAll();
+        }
+
+        return ResponseEntity.ok("Blind test stopped.");
     }
 }
