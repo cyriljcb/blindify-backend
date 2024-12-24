@@ -135,6 +135,8 @@ public class BlindTestController {
             isPaused.notifyAll();
         }
 
+        System.out.println("Blind test stopped.");
         return ResponseEntity.ok("Blind test stopped.");
+
     }
 }
