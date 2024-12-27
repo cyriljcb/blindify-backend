@@ -108,4 +108,45 @@ public class SpotifyPlayerController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
         }
     }
+    @GetMapping("/player/current")
+    public ResponseEntity<?> getCurrentTrack() {
+        try {
+            String endpoint = "https://api.spotify.com/v1/me/player/currently-playing";
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("Authorization", "Bearer " + tokenManager.getAccessToken());
+
+            HttpEntity<Void> request = new HttpEntity<>(headers);
+
+            ResponseEntity<Map> response = restTemplate.exchange(endpoint, HttpMethod.GET, request, Map.class);
+
+            if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
+                Map<String, Object> currentTrackData = response.getBody();
+
+                // Extraire les informations
+                Map<String, Object> item = (Map<String, Object>) currentTrackData.get("item");
+                String songName = (String) item.get("name");
+                List<Map<String, Object>> artists = (List<Map<String, Object>>) item.get("artists");
+                String artistName = artists.stream()
+                        .map(artist -> (String) artist.get("name"))
+                        .collect(Collectors.joining(", "));
+
+                // Créer une réponse avec les champs nécessaires
+                Map<String, Object> trackDetails = Map.of(
+                        "songName", songName,
+                        "artistName", artistName
+                );
+
+                return ResponseEntity.ok(trackDetails);
+            } else {
+                return ResponseEntity.status(HttpStatus.NO_CONTENT).body("No track currently playing.");
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("An error occurred while fetching the current track: " + e.getMessage());
+        }
+    }
+
+
 }
