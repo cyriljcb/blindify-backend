@@ -1,15 +1,16 @@
 package com.blintest.blintest_backend.Service;
 
-import com.blintest.blintest_backend.Model.Playlist;
-import com.blintest.blintest_backend.Model.Song;
+import com.blintest.blintest_backend.dto.PlaylistDTO;
+import com.blintest.blintest_backend.dto.SongDTO;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.*;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
-import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -19,17 +20,15 @@ public class SpotifyService {
     private final SpotifyTokenManager tokenManager;
     private final RestTemplate restTemplate;
 
-
     @Autowired
     public SpotifyService(SpotifyTokenManager tokenManager) {
         this.tokenManager = tokenManager;
         this.restTemplate = new RestTemplate();
     }
 
-    public Playlist getPlaylist(String playlistId) {
+    public PlaylistDTO getPlaylist(String playlistId) {
         String playlistInfoUrl = "https://api.spotify.com/v1/playlists/" + playlistId;
         String playlistTracksUrl = "https://api.spotify.com/v1/playlists/" + playlistId + "/tracks";
-        RestTemplate restTemplate = new RestTemplate();
 
         HttpHeaders headers = new HttpHeaders();
         headers.setBearerAuth(tokenManager.getAccessToken());
@@ -45,37 +44,52 @@ public class SpotifyService {
         }
 
         String playlistName = (String) playlistInfo.get("name");
+        List<Map<String, Object>> images = (List<Map<String, Object>>) playlistInfo.get("images");
+        String playlistBanner = (images != null && !images.isEmpty()) ? (String) images.get(0).get("url") : ""; // Par défaut si aucune image
 
-        // Récupérer les morceaux de la playlist
-        ResponseEntity<Map> tracksResponse = restTemplate.exchange(playlistTracksUrl, HttpMethod.GET, request, Map.class);
-        Map<String, Object> responseBody = tracksResponse.getBody();
+        // Pagination pour récupérer tous les morceaux
+        List<SongDTO> songs = new ArrayList<>();
+        int limit = 100; // Nombre maximum de morceaux par requête
+        int offset = 0;
 
-        if (responseBody == null || !responseBody.containsKey("items")) {
-            throw new RuntimeException("Failed to fetch playlist tracks");
+        while (true) {
+            String paginatedUrl = playlistTracksUrl + "?limit=" + limit + "&offset=" + offset;
+
+            ResponseEntity<Map> tracksResponse = restTemplate.exchange(paginatedUrl, HttpMethod.GET, request, Map.class);
+            Map<String, Object> responseBody = tracksResponse.getBody();
+
+            if (responseBody == null || !responseBody.containsKey("items")) {
+                break;
+            }
+
+            List<Map<String, Object>> items = (List<Map<String, Object>>) responseBody.get("items");
+            if (items == null || items.isEmpty()) {
+                break; // Aucun autre morceau à récupérer
+            }
+
+            for (Map<String, Object> item : items) {
+                Map<String, Object> track = (Map<String, Object>) item.get("track");
+                if (track == null) continue;
+
+                String id = (String) track.get("id");
+                String name = (String) track.get("name");
+                String previewUrl = (String) track.get("preview_url");
+                Integer durationMs = (Integer) track.get("duration_ms");
+
+                if (id == null || name == null) continue;
+
+                List<Map<String, Object>> artists = (List<Map<String, Object>>) track.get("artists");
+                String artistName = artists != null && !artists.isEmpty() ? (String) artists.get(0).get("name") : "Unknown Artist";
+
+                songs.add(new SongDTO(id, name, artistName, previewUrl, durationMs != null ? durationMs : 0));
+            }
+
+            offset += limit; // Passer à la page suivante
         }
 
-        List<Map<String, Object>> items = (List<Map<String, Object>>) responseBody.get("items");
-        List<Song> songs = new ArrayList<>();
-
-        for (Map<String, Object> item : items) {
-            Map<String, Object> track = (Map<String, Object>) item.get("track");
-            if (track == null) continue;
-
-            String id = (String) track.get("id");
-            String name = (String) track.get("name");
-            String previewUrl = (String) track.get("preview_url");
-            Integer durationMs = (Integer) track.get("duration_ms");
-
-            if (id == null || name == null) continue;
-
-            List<Map<String, Object>> artists = (List<Map<String, Object>>) track.get("artists");
-            String artistName = artists != null && !artists.isEmpty() ? artists.get(0).get("name").toString() : "Unknown Artist";
-
-            songs.add(new Song(id, name, artistName, previewUrl, durationMs != null ? durationMs : 0));
-        }
-
-        return new Playlist(playlistId, playlistName, songs);
+        return new PlaylistDTO(playlistId, playlistName, playlistBanner, songs);
     }
+
     public List<Map<String, Object>> getUserPlaylists() {
         String url = "https://api.spotify.com/v1/me/playlists";
         HttpHeaders headers = new HttpHeaders();

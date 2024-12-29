@@ -2,14 +2,14 @@ package com.blintest.blintest_backend.dto;
 
 public class SongDTO {
     private String id;         // ID unique de la chanson
-    private String name;       // Nom de la chanson
+    private String songName;       // Nom de la chanson
     private String artistName; // Nom de l'artiste
     private String previewUrl; // URL pour l'extrait audio (peut être null)
     private int duration;      // Durée en millisecondes
 
     public SongDTO(String id, String name, String artistName, String previewUrl, int duration) {
         this.id = id;
-        this.name = name;
+        this.songName = name;
         this.artistName = artistName;
         this.previewUrl = previewUrl;
         this.duration = duration;
@@ -19,8 +19,8 @@ public class SongDTO {
         return id;
     }
 
-    public String getName() {
-        return name;
+    public String getSongName() {
+        return songName;
     }
 
     public String getArtistName() {
@@ -31,7 +31,7 @@ public class SongDTO {
         return previewUrl;
     }
 
-    public int getDuration() {
+    public int getDurationMs() {
         return duration;
     }
 }
