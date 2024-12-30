@@ -5,8 +5,6 @@ import com.blintest.blintest_backend.Service.SpotifyTokenManager;
 import com.blintest.blintest_backend.dto.PlaylistDTO;
 import com.blintest.blintest_backend.dto.SongDTO;
 import org.springframework.http.*;
-import org.springframework.messaging.handler.annotation.MessageMapping;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.RestTemplate;
 
@@ -20,45 +18,28 @@ public class SpotifyPlayerController {
 
     private final SpotifyService spotifyService;
     private final SpotifyTokenManager tokenManager;
-    private final SimpMessagingTemplate messagingTemplate;
     private final RestTemplate restTemplate;
 
-    private final AtomicBoolean isPaused = new AtomicBoolean(false);
-    private final AtomicBoolean isStopped = new AtomicBoolean(false);
-
-    public SpotifyPlayerController(SpotifyService spotifyService, SpotifyTokenManager tokenManager, SimpMessagingTemplate messagingTemplate) {
+    public SpotifyPlayerController(SpotifyService spotifyService, SpotifyTokenManager tokenManager) {
         this.spotifyService = spotifyService;
         this.tokenManager = tokenManager;
-        this.messagingTemplate = messagingTemplate;
         this.restTemplate = new RestTemplate();
     }
 
-    // Blind test - Démarrer la séquence
+    // Démarrer le blind test
     @GetMapping("/blindtest/start")
-    public ResponseEntity<Map<String, String>> startBlindTest(@RequestParam("playlistId") String playlistId) {
+    public ResponseEntity<?> startBlindTest(@RequestParam("playlistId") String playlistId) {
         try {
-            System.out.println("Démarrage du blind test pour la playlist : " + playlistId);
-
             PlaylistDTO playlist = spotifyService.getPlaylist(playlistId);
-            System.out.println("Playlist récupérée : " + playlist);
-
             List<SongDTO> songs = playlist.getSongs();
+
             if (songs == null || songs.isEmpty()) {
-                System.out.println("Aucune chanson trouvée dans la playlist.");
                 return ResponseEntity.status(HttpStatus.NOT_FOUND)
                         .body(Collections.singletonMap("error", "No songs found in the playlist."));
             }
 
-            Collections.shuffle(songs);
-            System.out.println("Chansons mélangées : " + songs);
-
-            messagingTemplate.convertAndSend("/topic/playlist", songs);
-            System.out.println("Chansons envoyées via WebSocket.");
-
-            // Renvoyer une réponse JSON au frontend
-            Map<String, String> response = new HashMap<>();
-            response.put("message", "Blind test playlist sent to the frontend.");
-            return ResponseEntity.ok(response);
+            Collections.shuffle(songs); // Mélange des chansons
+            return ResponseEntity.ok(Collections.singletonMap("playlist", songs));
         } catch (Exception e) {
             e.printStackTrace();
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
@@ -66,35 +47,72 @@ public class SpotifyPlayerController {
         }
     }
 
-    // Blind test - Pause
-    @PutMapping("/blindtest/pause")
-    public ResponseEntity<?> pauseBlindTest() {
-        isPaused.set(true);
-        return ResponseEntity.ok("Blind test paused.");
-    }
+    // Envoyer des commandes liées au blind test
+    @PostMapping("/blindtest/action")
+    public ResponseEntity<?> handleBlindTestAction(@RequestBody Map<String, String> action) {
+        String command = action.get("command");
+        String songId = action.get("songId");
 
-    // Blind test - Reprise
-    @PutMapping("/blindtest/resume")
-    public ResponseEntity<?> resumeBlindTest() {
-        synchronized (isPaused) {
-            isPaused.set(false);
-            isPaused.notifyAll();
+        try {
+            switch (command) {
+                case "play":
+                    playTrack(songId);
+                    break;
+                case "playAtRefrain":
+                    handlePlayAtRefrain(songId);
+                    break;
+                case "stop":
+                    pausePlayback();
+                    break;
+                case "resume":
+                    resumePlayback();
+                    break;
+                default:
+                    return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                            .body(Collections.singletonMap("error", "Unknown command: " + command));
+            }
+            return ResponseEntity.ok(Collections.singletonMap("message", "Command executed successfully."));
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Collections.singletonMap("error", "Error executing command: " + e.getMessage()));
         }
-        return ResponseEntity.ok("Blind test resumed.");
     }
 
-    // Blind test - Stop
-    @PutMapping("/blindtest/stop")
-    public ResponseEntity<?> stopBlindTest() {
-        isStopped.set(true);
-        return ResponseEntity.ok("Blind test stopped.");
-    }
-
+    // Lecture d'une chanson
     private void playTrack(String trackId) {
         Map<String, Object> playRequest = Map.of("uris", List.of("spotify:track:" + trackId));
         startPlayback(playRequest);
     }
 
+    // Lecture au refrain
+    private void handlePlayAtRefrain(String songId) {
+        try {
+            String songDetailsEndpoint = "https://api.spotify.com/v1/tracks/" + songId;
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("Authorization", "Bearer " + tokenManager.getAccessToken());
+
+            HttpEntity<Void> request = new HttpEntity<>(headers);
+            ResponseEntity<Map> response = restTemplate.exchange(songDetailsEndpoint, HttpMethod.GET, request, Map.class);
+
+            if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
+                Integer durationMs = (Integer) response.getBody().get("duration_ms");
+                if (durationMs != null && durationMs > 0) {
+                    int refrainPositionMs = (int) (durationMs * 0.55);
+                    Map<String, Object> playAtRefrainRequest = Map.of(
+                            "uris", List.of("spotify:track:" + songId),
+                            "position_ms", refrainPositionMs
+                    );
+                    startPlayback(playAtRefrainRequest);
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    // Gestion de la lecture
     @PutMapping("/player/play")
     public ResponseEntity<?> startPlayback(@RequestBody Map<String, Object> playRequest) {
         try {
@@ -133,6 +151,7 @@ public class SpotifyPlayerController {
                     .body("Error pausing playback: " + e.getMessage());
         }
     }
+
     @PutMapping("/player/resume")
     public ResponseEntity<?> resumePlayback() {
         try {
@@ -152,6 +171,7 @@ public class SpotifyPlayerController {
         }
     }
 
+    // Récupération des playlists
     @GetMapping("/playlists")
     public ResponseEntity<List<PlaylistDTO>> getAllPlaylists() {
         try {
@@ -167,8 +187,6 @@ public class SpotifyPlayerController {
                         if (images != null && !images.isEmpty()) {
                             banner = (String) images.get(0).get("url");
                         }
-                        Map<String, Object> tracksData = (Map<String, Object>) playlistData.get("tracks");
-                        int totalTracks = tracksData != null ? (int) tracksData.get("total") : 0;
 
                         return new PlaylistDTO(id, name, banner, List.of());
                     })
@@ -181,67 +199,4 @@ public class SpotifyPlayerController {
                     .body(null);
         }
     }
-    @MessageMapping("/blindtest/action")
-    public void handleBlindTestAction(Map<String, String> action) {
-        String command = action.get("command");
-        String songId = action.get("songId");
-
-        switch (command) {
-            case "play":
-                playTrack(songId);
-                break;
-            case "playAtRefrain":
-                handlePlayAtRefrain(songId);
-                break;
-            case "stop":
-                pausePlayback();
-                break;
-            case "resume":
-                resumePlayback();
-                break;
-            default:
-                System.out.println("Commande inconnue : " + command);
-        }
-    }
-
-    private void handlePlayAtRefrain(String songId) {
-        try {
-            // Appeler l'API Spotify pour obtenir les détails de la chanson
-            String songDetailsEndpoint = "https://api.spotify.com/v1/tracks/" + songId;
-
-            HttpHeaders headers = new HttpHeaders();
-            headers.set("Authorization", "Bearer " + tokenManager.getAccessToken());
-
-            HttpEntity<Void> request = new HttpEntity<>(headers);
-            ResponseEntity<Map> response = restTemplate.exchange(songDetailsEndpoint, HttpMethod.GET, request, Map.class);
-
-            if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
-                // Extraire la durée de la chanson en millisecondes
-                Integer durationMs = (Integer) response.getBody().get("duration_ms");
-
-                if (durationMs != null && durationMs > 0) {
-                    // Calculer la position du refrain à 70% de la durée totale
-                    int refrainPositionMs = (int) (durationMs * 0.55);
-
-                    // Préparer et envoyer la requête de lecture
-                    Map<String, Object> playAtRefrainRequest = Map.of(
-                            "uris", List.of("spotify:track:" + songId),
-                            "position_ms", refrainPositionMs
-                    );
-
-                    startPlayback(playAtRefrainRequest);
-                    System.out.println("Lecture du refrain à " + refrainPositionMs + " ms pour la chanson " + songId);
-                } else {
-                    System.out.println("Durée de la chanson non valide ou non trouvée.");
-                }
-            } else {
-                System.out.println("Impossible de récupérer les détails de la chanson : " + response.getStatusCode());
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-            System.out.println("Erreur lors de la récupération des détails de la chanson : " + e.getMessage());
-        }
-    }
-
-
 }
