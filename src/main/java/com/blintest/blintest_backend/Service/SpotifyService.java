@@ -78,10 +78,16 @@ public class SpotifyService {
 
                 if (id == null || name == null) continue;
 
+                // Récupération de tous les artistes
                 List<Map<String, Object>> artists = (List<Map<String, Object>>) track.get("artists");
-                String artistName = artists != null && !artists.isEmpty() ? (String) artists.get(0).get("name") : "Unknown Artist";
+                List<String> artistNames = new ArrayList<>();
+                if (artists != null) {
+                    for (Map<String, Object> artist : artists) {
+                        artistNames.add((String) artist.get("name"));
+                    }
+                }
 
-                songs.add(new SongDTO(id, name, artistName, previewUrl, durationMs != null ? durationMs : 0));
+                songs.add(new SongDTO(id, name, artistNames, previewUrl, durationMs != null ? durationMs : 0));
             }
 
             offset += limit; // Passer à la page suivante

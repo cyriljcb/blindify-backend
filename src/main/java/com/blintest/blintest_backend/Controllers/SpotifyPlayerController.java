@@ -37,9 +37,18 @@ public class SpotifyPlayerController {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND)
                         .body(Collections.singletonMap("error", "No songs found in the playlist."));
             }
-
             Collections.shuffle(songs); // Mélange des chansons
-            return ResponseEntity.ok(Collections.singletonMap("playlist", songs));
+            List<Map<String, Object>> songsWithArtists = songs.stream().map(song -> {
+                Map<String, Object> songData = new HashMap<>();
+                songData.put("id", song.getId());
+                songData.put("songName", song.getSongName());
+                songData.put("artistNames", String.join(", ", song.getArtistNames())); // Liste -> Chaîne
+                songData.put("previewUrl", song.getPreviewUrl());
+                songData.put("duration", song.getDurationMs());
+                return songData;
+            }).collect(Collectors.toList());
+
+            return ResponseEntity.ok(Collections.singletonMap("playlist", songsWithArtists));
         } catch (Exception e) {
             e.printStackTrace();
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
@@ -47,7 +56,6 @@ public class SpotifyPlayerController {
         }
     }
 
-    // Envoyer des commandes liées au blind test
     @PostMapping("/blindtest/action")
     public ResponseEntity<?> handleBlindTestAction(@RequestBody Map<String, String> action) {
         String command = action.get("command");
@@ -135,6 +143,9 @@ public class SpotifyPlayerController {
 
     @PutMapping("/player/pause")
     public ResponseEntity<?> pausePlayback() {
+
+        System.out.println("blind test en pause");
+
         try {
             String endpoint = "https://api.spotify.com/v1/me/player/pause";
 
@@ -155,7 +166,7 @@ public class SpotifyPlayerController {
     @PutMapping("/player/resume")
     public ResponseEntity<?> resumePlayback() {
         try {
-            String endpoint = "https://api.spotify.com/v1/me/player/resume";
+            String endpoint = "https://api.spotify.com/v1/me/player/play";
 
             HttpHeaders headers = new HttpHeaders();
             headers.set("Authorization", "Bearer " + tokenManager.getAccessToken());

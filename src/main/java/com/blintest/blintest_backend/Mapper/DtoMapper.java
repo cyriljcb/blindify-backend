@@ -19,6 +19,6 @@ public class DtoMapper {
     }
 
     public static SongDTO mapToSongDTO(Song song) {
-        return new SongDTO(song.getId(), song.getName(), song.getArtist(), song.getPreviewUrl(), song.getDurationMs());
+        return new SongDTO(song.getId(), song.getName(), song.getArtistNames(), song.getPreviewUrl(), song.getDurationMs());
     }
 }
