@@ -63,18 +63,13 @@ public class SpotifyManualAuthController {
                 Map<String, Object> responseBody = responseEntity.getBody();
                 String accessToken = (String) responseBody.get("access_token");
 
-                // Stocker l'access token dans SpotifyTokenManager
                 tokenManager.setAccessToken(accessToken);
-
-                // Rediriger vers Angular après un succès
-                response.sendRedirect("http://localhost:4200/home"); // Redirige vers la route "/home" ou autre
+                response.sendRedirect("http://localhost:4200/home?token=" + accessToken);
             } else {
-                // Rediriger vers une page d'erreur en cas d'échec
                 response.sendRedirect("http://localhost:4200/error?message=" + responseEntity.getBody());
             }
         } catch (HttpClientErrorException e) {
             try {
-                // Rediriger vers une page d'erreur en cas d'exception
                 response.sendRedirect("http://localhost:4200/error?message=" + e.getMessage());
             } catch (IOException ioException) {
                 ioException.printStackTrace();

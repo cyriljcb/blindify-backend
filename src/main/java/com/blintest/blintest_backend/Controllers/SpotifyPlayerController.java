@@ -9,7 +9,6 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.*;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 @RestController
@@ -143,9 +142,6 @@ public class SpotifyPlayerController {
 
     @PutMapping("/player/pause")
     public ResponseEntity<?> pausePlayback() {
-
-        System.out.println("blind test en pause");
-
         try {
             String endpoint = "https://api.spotify.com/v1/me/player/pause";
 
@@ -162,7 +158,6 @@ public class SpotifyPlayerController {
                     .body("Error pausing playback: " + e.getMessage());
         }
     }
-
     @PutMapping("/player/resume")
     public ResponseEntity<?> resumePlayback() {
         try {
